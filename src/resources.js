@@ -17,26 +17,26 @@ class FileClient {
   }
 
   uploadImage(contentType, buffer) {
-  	var key = `img-${uuid.v4()}`;
+    var key = `img-${uuid.v4()}`;
     var params = {
-    	Bucket: config.S3_BUCKET,
-    	Key: `images/${key}`,
-    	Body: buffer,
-    	ContentType: contentType
+      Bucket: config.S3_BUCKET,
+      Key: `images/${key}`,
+      Body: buffer,
+      ContentType: contentType
     };
     console.log(key, params);
     return this.s3.putObject(params).promise()
       .then(function (data) {
-      	console.log("PutObject");
-      	console.log(data);
+        console.log("PutObject");
+        console.log(data);
         return key;
       })
   }
 
   loadImage(key) {
-  	var params = {
-    	Bucket: config.S3_BUCKET,
-    	Key: `images/${key}`,
+    var params = {
+      Bucket: config.S3_BUCKET,
+      Key: `images/${key}`,
     };
     return this.s3.getObject(params).promise()
       .then(function (data) {

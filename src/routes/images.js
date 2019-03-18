@@ -13,11 +13,11 @@ const sizes = {
 
 class Images extends express.Router {
   constructor(s3, db) {
-  	super();
+    super();
 
     // Image Upload
-  	this.post('/', upload.single('image'), function (req, res) {
-  	  console.log(req.file);
+    this.post('/', upload.single('image'), function (req, res) {
+      console.log(req.file);
       s3.uploadImage(req.file.mimetype, req.file.buffer)
         .then(function(key) {
           return db('files')
@@ -33,20 +33,20 @@ class Images extends express.Router {
           res.send({id: id});
         })
         .catch(function(err) {
-      	  console.log(err);
-      	  res.status(500).send("Failed");
+          console.log(err);
+          res.status(500).send("Failed");
         })
-  	})
+    })
 
-  	// List Images
-  	this.get('/', function (req, res) {
-  	  db.select('id', 'name', 'content_type', 'size').from('files')
-  	    .then(function (data) {
-  	      res.send(data);
-  	    });
-  	});
+    // List Images
+    this.get('/', function (req, res) {
+      db.select('id', 'name', 'content_type', 'size').from('files')
+        .then(function (data) {
+          res.send(data);
+        });
+    });
 
-  	this.get('/:id', function (req, res) {
+    this.get('/:id', function (req, res) {
       var state = {}
       db.select('id','name', 'content_type', 's3_key').from('files').where('id', req.params.id)
         .then(function (data) {
@@ -79,7 +79,7 @@ class Images extends express.Router {
           console.log(err);
           res.status(500).send("Failed");
         })
-  	});
+    });
   }
 }
 
