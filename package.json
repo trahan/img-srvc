@@ -1,0 +1,19 @@
+{
+  "name": "img-srvc",
+  "version": "1.0.0",
+  "description": "Rest API for manipulating images",
+  "author": "matt.trahan@gmail.com",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.422.0",
+    "express": "^4.16.1",
+    "gm": "^1.23.1",
+    "knex": "^0.16.3",
+    "multer": "^1.4.1",
+    "pg": "^7.8.2",
+    "uuid": "^3.3.2"
+  }
+}
