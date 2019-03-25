@@ -17,7 +17,10 @@ app.use(expressWinston.logger({
   transports: [
     new winston.transports.Console()
   ],
-  format: winston.format.json()
+  format: winston.format.json(),
+  ignoreRoute: (req, res) => {
+    return (req.path == '/health' ? true : false);
+  }
 }));
 
 // Routes
