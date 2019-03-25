@@ -1,0 +1,178 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+
+  DBUsername:
+    Description: DB admin username
+    Type: String
+
+  DBPassword:
+    Description: DB admin password
+    Type: String
+
+  Container:
+    Description: container image
+    Type: String
+
+Resources:
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SecurityGroup for the public load balancer
+      VpcId: vpc-73f7e11b
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Subnets:
+        - subnet-86d1a5fc
+        - subnet-a3b28ccb
+        - subnet-caf62986
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupName: DBSecurityGroup
+      GroupDescription: SecurityGroup for DB
+      SecurityGroupIngress:
+        - ToPort: 5432
+          FromPort: 5432
+          IpProtocol: tcp
+          SourceSecurityGroupName: DBSecurityGroup
+      VpcId: vpc-73f7e11b
+
+  DB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      VPCSecurityGroups:
+      - Ref: DBSecurityGroup
+      AllocatedStorage: '5'
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBName: ImgSrvc
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+
+  ServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for services
+      VpcId: vpc-73f7e11b
+      SecurityGroupIngress:
+        - FromPort: 8080
+          ToPort: 8080
+          IpProtocol: tcp
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          IpProtocol: -1
+      SecurityGroupEgress:
+        - FromPort: 0
+          ToPort: 65535
+          IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+
+  TaskDef:
+    Type: AWS::ECS::TaskDefinition
+    Properties: 
+      Family: img-srvc
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      TaskRoleArn: arn:aws:iam::940541145267:role/ecsTaskExecutionRole
+      ExecutionRoleArn: arn:aws:iam::940541145267:role/ecsTaskExecutionRole
+      ContainerDefinitions:
+        - Name: img-srvc
+          Cpu: 256
+          Memory: 512
+          Image: !Ref Container
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: img-srvc
+              awslogs-region: us-east-2
+              awslogs-stream-prefix: logs
+          Environment:
+            - Name: DB_HOST
+              Value: !GetAtt DB.Endpoint.Address
+            - Name: DB_USER
+              Value: !Ref DBUsername
+            - Name: DB_PASSWORD
+              Value: !Ref DBPassword
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - LoadBalancerListener
+    Properties:
+      Cluster: !Ref Cluster
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 75
+      DesiredCount: 1
+      HealthCheckGracePeriodSeconds: 30
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref ServiceSecurityGroup
+            - !Ref DBSecurityGroup
+          Subnets:
+            - subnet-86d1a5fc
+            - subnet-a3b28ccb
+            - subnet-caf62986
+      TaskDefinition: !Ref TaskDef
+      LoadBalancers:
+        - ContainerName: img-srvc
+          ContainerPort: 8080
+          TargetGroupArn: !Ref TargetGroup
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      HealthCheckIntervalSeconds: 5
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 2
+      HealthyThresholdCount: 4
+      UnhealthyThresholdCount: 2
+      TargetType: ip
+      Port: 8080
+      Protocol: HTTP
+      VpcId: vpc-73f7e11b
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: img-srvc
+
+Outputs:
+  LoadBalancerDNS:
+    Value: !GetAtt LoadBalancer.DNSName

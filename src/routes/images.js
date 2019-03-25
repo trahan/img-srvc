@@ -1,85 +1,73 @@
-var express = require('express')
-var multer  = require('multer')
-var storage = multer.memoryStorage()
-var upload = multer({ storage: storage })
-var gm = require('gm');
+const _ = require('lodash');
+const express = require('express');
+const multer  = require('multer');
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
-const sizes = {
-  tiny: [100,100],
-  small: [300,300],
-  medium: [500,500],
-  large: [1000,1000]
-};
+/*
+  Image Routes
 
+  Images can be uploaded to:
+
+    POST /images/
+
+    200 {
+      id: 0
+    }
+
+  This route assumes images are uploaded using multi-part file uploads. Images
+  are listed at:
+
+    GET /images/
+
+    200 [
+      {
+        "id":1,
+        "name":"cat.jpeg",
+        "content_type":"image/jpeg",
+        "size":509580
+      }
+    ]
+
+  Images are retrieved at:
+
+    GET /images/:id
+
+    200 <image>
+*/
 class Images extends express.Router {
-  constructor(s3, db) {
+  constructor(imageClient) {
     super();
 
     // Image Upload
-    this.post('/', upload.single('image'), function (req, res) {
-      console.log(req.file);
-      s3.uploadImage(req.file.mimetype, req.file.buffer)
-        .then(function(key) {
-          return db('files')
-            .returning('id')
-            .insert({
-              name: req.file.originalname,
-              s3_key: key,
-              content_type: req.file.mimetype,
-              size: req.file.size
-            });
-        })
-        .then(function (id) {
-          res.send({id: id});
-        })
-        .catch(function(err) {
-          console.log(err);
-          res.status(500).send("Failed");
-        })
+    this.post('/', upload.single('image'), (req, res) => {
+      var { mimetype, originalname, size, buffer } = req.file
+      imageClient.saveImage(mimetype, originalname, size, buffer)
+        .then((id) => res.send({id: id}))
+        .catch(_.partial(error, res));
     })
 
     // List Images
-    this.get('/', function (req, res) {
-      db.select('id', 'name', 'content_type', 'size').from('files')
-        .then(function (data) {
-          res.send(data);
-        });
+    this.get('/', (req, res) => {
+      imageClient.listImages()
+        .then((data) => res.send(data))
+        .catch(_.partial(error, res));
     });
 
-    this.get('/:id', function (req, res) {
-      var state = {}
-      db.select('id','name', 'content_type', 's3_key').from('files').where('id', req.params.id)
-        .then(function (data) {
-          console.log(data);
-          state.name = data[0].name;
-          state.content_type = data[0].content_type;
-          return s3.loadImage(data[0].s3_key);
+    // Load and resize image
+    this.get('/:id', (req, res) => {
+      imageClient.loadAndResize(req.params.id, req.query.size)
+        .then((result) => {
+          res.set('content-type', result.contentType);
+          res.send(result.imageData)
         })
-        .then(function (image) {
-          if (req.query.size == 'original') {
-            res.set('content-type', state.content_type);
-            res.send(image);
-            return
-          }
-
-          var size = sizes[req.query.size]
-          if (size == null) {
-            size = [500,500];
-          }
-
-          gm(image, state.name)
-            .resize(size[0],size[1])
-            .toBuffer('JPEG', function (err, buffer) {
-              if (err) throw err;
-              res.set('content-type', state.content_type);
-              res.send(buffer);
-            });
-        })
-        .catch(function(err) {
-          console.log(err);
-          res.status(500).send("Failed");
-        })
+        .catch(_.partial(error, res));
     });
+
+    function error(res, err) {
+      console.log(err);
+      res.status(500).send("Internal Service Error");
+    }
   }
 }
 

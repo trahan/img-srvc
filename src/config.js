@@ -1,7 +1,8 @@
-"use strict";
-
 /*
   App Configuration
+
+  Configuration is loaded via environment variables.  Everything should
+  have a default for local dev.
 */
 
 module.exports = {

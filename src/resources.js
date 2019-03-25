@@ -1,5 +1,3 @@
-"use strict";
-
 /*
   Resources module
 
@@ -11,7 +9,7 @@ const config = require('./config');
 var AWS = require('aws-sdk');
 var uuid = require('uuid');
 
-class FileClient {
+class S3Client {
   constructor(s3) {
     this.s3 = s3;
   }
@@ -24,11 +22,8 @@ class FileClient {
       Body: buffer,
       ContentType: contentType
     };
-    console.log(key, params);
     return this.s3.putObject(params).promise()
-      .then(function (data) {
-        console.log("PutObject");
-        console.log(data);
+      .then((data) => {
         return key;
       })
   }
@@ -39,7 +34,7 @@ class FileClient {
       Key: `images/${key}`,
     };
     return this.s3.getObject(params).promise()
-      .then(function (data) {
+      .then((data) => {
         return data.Body
       });
   }
@@ -50,12 +45,12 @@ module.exports = {
   db: require('knex')({
     client: 'pg',
     connection: {
-      database : 'img-srvc',
+      database : 'ImgSrvc',
       host : config.DB_HOST,
       user : config.DB_USER,
       password : config.DB_PASSWORD
     }
   }),
 
-  fileClient: new FileClient(new AWS.S3)
+  s3Client: new S3Client(new AWS.S3)
 };
